@@ -1,4 +1,4 @@
-version: '3'
+name: yourls
 services:
   db:
     image: mysql:8.0
@@ -15,7 +15,7 @@ services:
       - ./volumes/mysql:/var/lib/mysql
 
   yourls:
-    container_name: yourls
+    image: yourls
     depends_on:
       - db
     ports:
@@ -30,7 +30,6 @@ services:
       - YOURLS_DB_PASS=${MYSQL_PASSWORD}
       - YOURLS_LANG=${YOURLS_LANG}
       - YOURLS_HOURS_OFFSET=${YOURLS_HOURS_OFFSET}
-    image: yourls
     volumes:
       - ./config/config.php:/var/www/html/user/config.php
       - ./config/config-container.php:/var/www/html/user/config-container.php
