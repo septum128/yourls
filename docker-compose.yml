@@ -18,8 +18,8 @@ services:
     image: yourls
     depends_on:
       - db
-    ports:
-      - ${YOURLS_EXTERNAL_PORT}:${YOURLS_INTERNAL_PORT}
+    expose:
+      - ${YOURLS_INTERNAL_PORT}
     environment:
       - YOURLS_SITE=${YOURLS_SITE}
       - YOURLS_USER=${YOURLS_USER}
@@ -32,6 +32,25 @@ services:
       - YOURLS_HOURS_OFFSET=${YOURLS_HOURS_OFFSET}
     volumes:
       - ./config/config.php:/var/www/html/user/config.php
-      - ./config/config-container.php:/var/www/html/user/config-container.php
       - ./config/languages/ja_JP.mo:/var/www/html/user/languages/ja_JP.mo
       - ./config/plugins:/var/www/html/user/plugins
+  nginx:
+    image: nginx:alpine
+    depends_on:
+      - yourls
+    ports:
+      - "${YOURLS_EXTERNAL_PORT}:80"
+      - "${YOURLS_EXTERNAL_SSLPORT}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/webroot:/var/www/certbot
+      - ./volumes/letsencrypt:/etc/letsencrypt:ro
+    restart: always
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ./nginx/webroot:/var/www/certbot
+      - ./volumes/letsencrypt:/etc/letsencrypt
+    # 12時間ごとに証明書の更新を試みる
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done;'"

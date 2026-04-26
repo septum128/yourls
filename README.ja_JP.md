@@ -10,6 +10,7 @@ YOURLSとMySQL 8.0をDocker Composeで簡単に構築できる環境です。日
 - **日本語対応**: YOURLS-ja_JPによる完全な日本語化
 - **簡単セットアップ**: 環境変数による柔軟な設定
 - **データ永続化**: ボリュームマウントによるデータ保護
+- **SSL対応**: Nginx + Let's Encryptによる本番HTTPS環境
 
 ## ライセンス
 
@@ -45,8 +46,11 @@ cp .env.example .env
 `.env`ファイルの主要な設定項目：
 
 ```bash
+# ドメイン名（SSL使用時に設定）
+YOURLS_DOMAIN=example.com
+
 # YOURLSのサイトURL（外部アクセス用のURL）
-YOURLS_SITE=http://localhost
+YOURLS_SITE=https://example.com
 
 # YOURLS管理者のユーザー名とパスワード
 YOURLS_USER=admin
@@ -58,8 +62,9 @@ YOURLS_LANG=ja_JP
 # タイムゾーンオフセット（日本標準時は9）
 YOURLS_HOURS_OFFSET=9
 
-# 外部アクセス用のポート（デフォルト: 80）
+# 外部アクセス用のポート
 YOURLS_EXTERNAL_PORT=80
+YOURLS_EXTERNAL_SSLPORT=443
 
 # MySQL設定
 MYSQL_ROOT_PASSWORD=example
@@ -70,17 +75,47 @@ MYSQL_PASSWORD=yourls
 
 **セキュリティのため、本番環境では必ずパスワードを変更してください。**
 
-### 3. Dockerコンテナの起動
+### 3. SSL証明書の取得と初回起動
+
+> **前提条件**: 公開可能なドメイン名を取得済みで、ポート80・443がサーバーに到達できること。
+
+#### 3-1. HTTP のみの nginx 設定を準備（ACME チャレンジ用）
+
+`YOUR_DOMAIN` を実際のドメイン名に置き換えて実行します。
 
 ```bash
+sed 's/YOUR_DOMAIN/example.com/g' nginx/nginx.init.conf > nginx/nginx.conf
+```
+
+#### 3-2. nginx を起動
+
+```bash
+docker compose up -d nginx
+```
+
+#### 3-3. Let's Encrypt 証明書を取得
+
+`example.com` と `your@email.com` を実際の値に置き換えて実行します。
+
+```bash
+docker compose run --rm certbot certonly \
+  --webroot -w /var/www/certbot \
+  -d example.com \
+  --email your@email.com \
+  --agree-tos \
+  --no-eff-email
+```
+
+#### 3-4. HTTPS 設定に切り替えて全サービスを起動
+
+```bash
+sed 's/YOUR_DOMAIN/example.com/g' nginx/nginx.prod.conf > nginx/nginx.conf
 docker compose up -d
 ```
 
-初回起動時は、イメージのダウンロードとデータベースの初期化に時間がかかる場合があります。
-
 ### 4. YOURLSのセットアップ
 
-ブラウザで `http://localhost/admin/` にアクセスし、初期セットアップを完了します。
+ブラウザで `https://example.com/admin/` にアクセスし、初期セットアップを完了します。
 
 1. 「Install YOURLS」ボタンをクリック
 2. データベーステーブルが自動的に作成されます
@@ -166,8 +201,14 @@ docker compose up -d
 │   │   └── ja_JP.mo           # 日本語翻訳ファイル
 │   ├── plugins/               # プラグインディレクトリ
 │   └── pages/                 # カスタムページ
+├── nginx/
+│   ├── nginx.conf             # Nginx設定ファイル（実行中に使用）
+│   ├── nginx.init.conf        # 初回証明書取得用設定（HTTP のみ）
+│   ├── nginx.prod.conf        # 本番用HTTPS設定
+│   └── webroot/              # ACME チャレンジ用（自動生成）
 ├── volumes/
-│   └── mysql/                 # MySQLデータ（自動生成）
+│   ├── mysql/                 # MySQLデータ（自動生成）
+│   └── letsencrypt/          # SSL証明書（自動生成）
 ├── .env                       # 環境変数設定（git管理外）
 ├── .env.example              # 環境変数のサンプル
 ├── docker-compose.yml        # Docker Compose設定
@@ -188,6 +229,15 @@ docker compose up -d
 - `hyphens-in-urls` - URLにハイフンを使用可能に
 - `random-bg` - ランダムな背景パターン
 - `sample-toolbar` - カスタムツールバーのサンプル
+
+## SSL証明書の自動更新
+
+`certbot` コンテナが12時間ごとに `certbot renew` を自動実行し、有効期限30日以内の証明書を更新します。
+更新後に nginx へ反映するため、定期的（週1回程度）に以下を実行してください。
+
+```bash
+docker compose exec nginx nginx -s reload
+```
 
 ## トラブルシューティング
 

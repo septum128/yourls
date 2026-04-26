@@ -10,6 +10,7 @@ This project provides an easy way to run [YOURLS](https://yourls.org/) (Your Own
 - **Japanese Support**: Full Japanese localization via YOURLS-ja_JP
 - **Easy Setup**: Flexible configuration through environment variables
 - **Data Persistence**: Data protection through volume mounting
+- **SSL Support**: Production HTTPS environment with Nginx + Let's Encrypt
 
 ## License
 
@@ -45,8 +46,11 @@ cp .env.example .env
 Key settings in the `.env` file:
 
 ```bash
+# Domain name (required for SSL)
+YOURLS_DOMAIN=example.com
+
 # YOURLS site URL (for external access)
-YOURLS_SITE=http://localhost
+YOURLS_SITE=https://example.com
 
 # YOURLS admin username and password
 YOURLS_USER=admin
@@ -58,8 +62,9 @@ YOURLS_LANG=ja_JP
 # Timezone offset (9 for Japan Standard Time)
 YOURLS_HOURS_OFFSET=9
 
-# External access port (default: 80)
+# External access ports
 YOURLS_EXTERNAL_PORT=80
+YOURLS_EXTERNAL_SSLPORT=443
 
 # MySQL settings
 MYSQL_ROOT_PASSWORD=example
@@ -70,17 +75,47 @@ MYSQL_PASSWORD=yourls
 
 **For security, always change passwords in production environments.**
 
-### 3. Start Docker Containers
+### 3. Obtain SSL Certificate and Start Services
+
+> **Prerequisites**: A publicly accessible domain name with ports 80 and 443 reachable from the internet.
+
+#### 3-1. Prepare HTTP-only nginx config (for ACME challenge)
+
+Replace `YOUR_DOMAIN` with your actual domain name.
 
 ```bash
+sed 's/YOUR_DOMAIN/example.com/g' nginx/nginx.init.conf > nginx/nginx.conf
+```
+
+#### 3-2. Start nginx
+
+```bash
+docker compose up -d nginx
+```
+
+#### 3-3. Obtain Let's Encrypt certificate
+
+Replace `example.com` and `your@email.com` with your actual values.
+
+```bash
+docker compose run --rm certbot certonly \
+  --webroot -w /var/www/certbot \
+  -d example.com \
+  --email your@email.com \
+  --agree-tos \
+  --no-eff-email
+```
+
+#### 3-4. Switch to HTTPS config and start all services
+
+```bash
+sed 's/YOUR_DOMAIN/example.com/g' nginx/nginx.prod.conf > nginx/nginx.conf
 docker compose up -d
 ```
 
-Initial startup may take time for image downloads and database initialization.
-
 ### 4. YOURLS Setup
 
-Access `http://localhost/admin/` in your browser to complete the initial setup.
+Access `https://example.com/admin/` in your browser to complete the initial setup.
 
 1. Click the "Install YOURLS" button
 2. Database tables will be created automatically
@@ -166,8 +201,14 @@ Access `http://localhost/admin/` in your browser and perform the initial setup a
 │   │   └── ja_JP.mo           # Japanese translation file
 │   ├── plugins/               # Plugin directory
 │   └── pages/                 # Custom pages
+├── nginx/
+│   ├── nginx.conf             # Active Nginx config (used at runtime)
+│   ├── nginx.init.conf        # HTTP-only config for initial cert setup
+│   ├── nginx.prod.conf        # Production HTTPS config
+│   └── webroot/              # ACME challenge directory (auto-generated)
 ├── volumes/
-│   └── mysql/                 # MySQL data (auto-generated)
+│   ├── mysql/                 # MySQL data (auto-generated)
+│   └── letsencrypt/          # SSL certificates (auto-generated)
 ├── .env                       # Environment variables (not in git)
 ├── .env.example              # Environment variables sample
 ├── docker-compose.yml        # Docker Compose configuration
@@ -188,6 +229,15 @@ Available sample plugins:
 - `hyphens-in-urls` - Enable hyphens in URLs
 - `random-bg` - Random background patterns
 - `sample-toolbar` - Custom toolbar sample
+
+## SSL Certificate Auto-Renewal
+
+The `certbot` container automatically runs `certbot renew` every 12 hours and renews certificates within 30 days of expiry.
+To apply renewed certificates to nginx, run the following periodically (e.g., once a week):
+
+```bash
+docker compose exec nginx nginx -s reload
+```
 
 ## Troubleshooting
 
