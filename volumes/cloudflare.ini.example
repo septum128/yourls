@@ -1,0 +1,4 @@
+# Cloudflare API トークン
+# 取得方法: Cloudflare ダッシュボード → マイプロフィール → API トークン
+# 必要な権限: Zone:DNS:Edit（対象ゾーンのみで可）
+dns_cloudflare_api_token = YOUR_CLOUDFLARE_API_TOKEN

@@ -77,49 +77,67 @@ MYSQL_PASSWORD=yourls
 
 ### 3. SSL証明書の取得と初回起動
 
-> **前提条件**: 公開可能なドメイン名を取得済みで、ポート80・443がサーバーに到達できること。
+> **前提条件**: Cloudflare でドメインを管理していること（DNS プロキシの有無は問わない）。
 
-#### 3-1. HTTP のみの nginx 設定を準備（ACME チャレンジ用）
+#### 3-1. Cloudflare API トークンを取得
 
-`YOUR_DOMAIN` を実際のドメイン名に置き換えて実行します。
+Cloudflare ダッシュボード → マイプロフィール → **API トークン** → トークンを作成
+
+必要な権限：**Zone > DNS > 編集**（対象ゾーンのみで可）
+
+#### 3-2. `volumes/cloudflare.ini` を作成
 
 ```bash
-sed 's/YOUR_DOMAIN/example.com/g' nginx/nginx.init.conf > nginx/nginx.conf
+cp volumes/cloudflare.ini.example volumes/cloudflare.ini
 ```
 
-#### 3-2. nginx を起動
+`volumes/cloudflare.ini` を開き、`YOUR_CLOUDFLARE_API_TOKEN` を取得したトークンに書き換えます。
+
+```ini
+dns_cloudflare_api_token = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+#### 3-3. nginx 設定を準備して起動
+
+`yourls.example.com` を実際のドメイン名に置き換えて実行します。
 
 ```bash
+sed 's/YOUR_DOMAIN/yourls.example.com/g' nginx/nginx.init.conf > nginx/nginx.conf
 docker compose up -d nginx
 ```
 
-#### 3-3. Let's Encrypt 証明書を取得
+#### 3-4. Let's Encrypt 証明書を取得
 
-`example.com` と `your@email.com` を実際の値に置き換えて実行します。
+`yourls.example.com` と `your@email.com` を実際の値に置き換えて実行します。
 
 ```bash
 docker compose run --rm certbot certonly \
-  --webroot -w /var/www/certbot \
-  -d example.com \
+  --dns-cloudflare \
+  --dns-cloudflare-credentials /etc/cloudflare.ini \
+  -d yourls.example.com \
   --email your@email.com \
   --agree-tos \
   --no-eff-email
 ```
 
-#### 3-4. HTTPS 設定に切り替えて全サービスを起動
+#### 3-5. HTTPS 設定に切り替えて全サービスを起動
+
+`yourls.example.com` を実際の値に置き換えて実行します。
 
 ```bash
-sed 's/YOUR_DOMAIN/example.com/g' nginx/nginx.prod.conf > nginx/nginx.conf
+sed 's/YOUR_DOMAIN/yourls.example.com/g' nginx/nginx.prod.conf > nginx/nginx.conf
 docker compose up -d
 ```
 
 ### 4. YOURLSのセットアップ
 
-ブラウザで `https://example.com/admin/` にアクセスし、初期セットアップを完了します。
+ブラウザで `https://yourls.example.com/admin/` にアクセスし、初期セットアップを完了します。
 
 1. 「Install YOURLS」ボタンをクリック
 2. データベーステーブルが自動的に作成されます
 3. `.env`で設定したユーザー名とパスワードでログイン
+
+※ドメインは取得した独自ドメインに置き換えること
 
 ## 使用方法
 

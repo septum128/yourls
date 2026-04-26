@@ -48,9 +48,9 @@ services:
     restart: always
 
   certbot:
-    image: certbot/certbot
+    image: certbot/dns-cloudflare
     volumes:
-      - ./nginx/webroot:/var/www/certbot
       - ./volumes/letsencrypt:/etc/letsencrypt
+      - ./volumes/cloudflare.ini:/etc/cloudflare.ini:ro
     # 12時間ごとに証明書の更新を試みる
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done;'"

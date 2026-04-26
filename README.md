@@ -77,36 +77,50 @@ MYSQL_PASSWORD=yourls
 
 ### 3. Obtain SSL Certificate and Start Services
 
-> **Prerequisites**: A publicly accessible domain name with ports 80 and 443 reachable from the internet.
+> **Prerequisites**: Domain managed in Cloudflare (proxy status does not matter).
 
-#### 3-1. Prepare HTTP-only nginx config (for ACME challenge)
+#### 3-1. Create a Cloudflare API Token
+
+Cloudflare Dashboard → My Profile → **API Tokens** → Create Token
+
+Required permission: **Zone > DNS > Edit** (specific zone only is fine)
+
+#### 3-2. Create `volumes/cloudflare.ini`
+
+```bash
+cp volumes/cloudflare.ini.example volumes/cloudflare.ini
+```
+
+Open `volumes/cloudflare.ini` and replace `YOUR_CLOUDFLARE_API_TOKEN` with your token.
+
+```ini
+dns_cloudflare_api_token = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+#### 3-3. Prepare nginx config and start
 
 Replace `YOUR_DOMAIN` with your actual domain name.
 
 ```bash
 sed 's/YOUR_DOMAIN/example.com/g' nginx/nginx.init.conf > nginx/nginx.conf
-```
-
-#### 3-2. Start nginx
-
-```bash
 docker compose up -d nginx
 ```
 
-#### 3-3. Obtain Let's Encrypt certificate
+#### 3-4. Obtain Let's Encrypt certificate
 
 Replace `example.com` and `your@email.com` with your actual values.
 
 ```bash
 docker compose run --rm certbot certonly \
-  --webroot -w /var/www/certbot \
+  --dns-cloudflare \
+  --dns-cloudflare-credentials /etc/cloudflare.ini \
   -d example.com \
   --email your@email.com \
   --agree-tos \
   --no-eff-email
 ```
 
-#### 3-4. Switch to HTTPS config and start all services
+#### 3-5. Switch to HTTPS config and start all services
 
 ```bash
 sed 's/YOUR_DOMAIN/example.com/g' nginx/nginx.prod.conf > nginx/nginx.conf
